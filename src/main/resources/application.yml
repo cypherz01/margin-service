@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: margin-service
+  mvc:
+    problemdetails:
+      enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        # Plain JSON payloads so non-Java consumers aren't coupled to Java class names
+        spring.json.add.type.headers: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# --- Margin model parameters (illustrative values, not a regulatory model) ---
+margin:
+  margin-call-topic: margin-calls
+  maintenance-ratio: 0.75
+  initial-margin-rates:
+    EQUITY: 0.15
+    BOND: 0.05
+    FX: 0.04
+    COMMODITY: 0.10
+  haircuts:
+    CASH: 0.00
+    GOVERNMENT_BOND: 0.02
+    CORPORATE_BOND: 0.10
+    EQUITY: 0.25
