@@ -27,6 +27,7 @@ management:
 # --- Margin model parameters (illustrative values, not a regulatory model) ---
 margin:
   margin-call-topic: margin-calls
+  publish-timeout: 5s
   maintenance-ratio: 0.75
   initial-margin-rates:
     EQUITY: 0.15

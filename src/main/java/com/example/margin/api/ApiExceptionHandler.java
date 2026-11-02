@@ -1,5 +1,6 @@
 package com.example.margin.api;
 
+import com.example.margin.messaging.MarginCallPublishException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,5 +24,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     ProblemDetail handleIllegalState(IllegalStateException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+    }
+
+    /** A required margin call could not be delivered; the client should retry the calculation. */
+    @ExceptionHandler(MarginCallPublishException.class)
+    ProblemDetail handleMarginCallPublish(MarginCallPublishException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "Margin call could not be published; retry the request");
     }
 }

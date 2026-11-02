@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +20,7 @@ import org.springframework.validation.annotation.Validated;
  * @param maintenanceRatio   maintenance margin as a fraction of initial margin
  * @param haircuts           fraction deducted from collateral market value, per collateral type
  * @param marginCallTopic    Kafka topic that margin-call events are published to
+ * @param publishTimeout     how long to wait for the broker to acknowledge a margin-call event
  */
 @Validated
 @ConfigurationProperties(prefix = "margin")
@@ -26,5 +28,6 @@ public record MarginProperties(
         @NotEmpty Map<AssetClass, BigDecimal> initialMarginRates,
         @NotNull @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal maintenanceRatio,
         @NotEmpty Map<CollateralType, BigDecimal> haircuts,
-        @NotBlank String marginCallTopic) {
+        @NotBlank String marginCallTopic,
+        @NotNull Duration publishTimeout) {
 }
