@@ -92,7 +92,10 @@ docker compose up -d kafka
 mvn spring-boot:run          # connects to localhost:29092
 ```
 
-Try it:
+Open **http://localhost:8080/** for a browser UI (static page in `src/main/resources/static/`, served by the app
+itself) to enter positions and collateral, run a calculation and see the margin result and any margin call.
+
+Or from the command line:
 
 ```bash
 curl -s localhost:8080/api/v1/margin/calculations \

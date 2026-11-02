@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Margin Calculator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+    <h1>Margin Calculator</h1>
+    <span class="subtitle">Initial / maintenance margin and collateral coverage</span>
+</header>
+
+<main class="layout">
+    <form id="calc-form" class="panel" novalidate>
+        <div class="field">
+            <label for="accountId">Account ID</label>
+            <input id="accountId" name="accountId" required placeholder="ACC-1" autocomplete="off">
+        </div>
+
+        <section>
+            <div class="section-head">
+                <h2>Positions</h2>
+                <button type="button" class="link" data-add="position">+ Add position</button>
+            </div>
+            <div class="table-wrap">
+                <table class="rows">
+                    <thead>
+                    <tr><th>Instrument</th><th>Asset class</th><th class="num">Quantity</th><th class="num">Price</th><th></th></tr>
+                    </thead>
+                    <tbody id="positions"></tbody>
+                </table>
+            </div>
+            <p class="hint">Negative quantity = short. Longs and shorts both consume margin.</p>
+        </section>
+
+        <section>
+            <div class="section-head">
+                <h2>Collateral</h2>
+                <button type="button" class="link" data-add="collateral">+ Add collateral</button>
+            </div>
+            <div class="table-wrap">
+                <table class="rows">
+                    <thead>
+                    <tr><th>Type</th><th class="num">Market value</th><th></th></tr>
+                    </thead>
+                    <tbody id="collateral"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="actions">
+            <button type="button" class="secondary" id="load-example">Load example</button>
+            <button type="submit" class="primary" id="submit">Calculate</button>
+        </div>
+    </form>
+
+    <section class="panel" id="output" aria-live="polite">
+        <div id="empty" class="empty">Enter a portfolio and press <strong>Calculate</strong>.</div>
+
+        <div id="error" class="banner banner-error" hidden></div>
+
+        <div id="result" hidden>
+            <div id="status" class="banner"></div>
+
+            <div class="coverage">
+                <div class="coverage-bar">
+                    <div class="coverage-fill" id="coverage-fill"></div>
+                    <div class="marker" id="marker-mm"><span>MM</span></div>
+                    <div class="marker" id="marker-im"><span>IM</span></div>
+                </div>
+                <div class="coverage-legend">Collateral after haircuts vs. maintenance (MM) and initial (IM) margin</div>
+            </div>
+
+            <dl class="metrics">
+                <div><dt>Gross exposure</dt><dd id="m-grossExposure"></dd></div>
+                <div><dt>Initial margin</dt><dd id="m-initialMargin"></dd></div>
+                <div><dt>Maintenance margin</dt><dd id="m-maintenanceMargin"></dd></div>
+                <div><dt>Collateral value</dt><dd id="m-collateralValue"></dd></div>
+                <div><dt>Excess / shortfall</dt><dd id="m-excess"></dd></div>
+                <div><dt>Margin call amount</dt><dd id="m-marginCallAmount"></dd></div>
+            </dl>
+        </div>
+    </section>
+</main>
+
+<template id="position-row">
+    <tr>
+        <td><input name="instrumentId" required placeholder="AAPL" aria-label="Instrument"></td>
+        <td>
+            <select name="assetClass" aria-label="Asset class">
+                <option>EQUITY</option><option>BOND</option><option>FX</option><option>COMMODITY</option>
+            </select>
+        </td>
+        <td><input name="quantity" type="number" step="any" required class="num" aria-label="Quantity"></td>
+        <td><input name="price" type="number" step="any" min="0" required class="num" aria-label="Price"></td>
+        <td><button type="button" class="remove" aria-label="Remove row">&times;</button></td>
+    </tr>
+</template>
+
+<template id="collateral-row">
+    <tr>
+        <td>
+            <select name="type" aria-label="Collateral type">
+                <option value="CASH">Cash</option>
+                <option value="GOVERNMENT_BOND">Government bond</option>
+                <option value="CORPORATE_BOND">Corporate bond</option>
+                <option value="EQUITY">Equity</option>
+            </select>
+        </td>
+        <td><input name="marketValue" type="number" step="any" min="0" required class="num" aria-label="Market value"></td>
+        <td><button type="button" class="remove" aria-label="Remove row">&times;</button></td>
+    </tr>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
