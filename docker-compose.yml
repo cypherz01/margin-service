@@ -29,9 +29,11 @@ services:
     container_name: margin-service
     ports:
       - "8080:8080"
+    env_file:
+      - path: local.env      # FINNHUB_API_KEY; optional so a fresh clone still starts
+        required: false
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}   # read from your shell or a .env file
     depends_on:
       kafka:
         condition: service_healthy

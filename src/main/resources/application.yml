@@ -1,9 +1,18 @@
 spring:
   application:
     name: margin-service
+  config:
+    # Local secrets (e.g. FINNHUB_API_KEY) when running from Maven/IDE; see local.env
+    import: optional:file:./local.env[.properties]
   mvc:
     problemdetails:
       enabled: true
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # Revalidate the UI's JS/CSS on every load so a redeploy never pairs new HTML with stale assets
+          no-cache: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
     producer:

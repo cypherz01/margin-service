@@ -12,6 +12,7 @@ target/
 
 # Local secrets (e.g. FINNHUB_API_KEY)
 .env
+local.env
 
 # OS
 .DS_Store

@@ -75,8 +75,10 @@ Invalid requests return `400` with an RFC 7807 `application/problem+json` body.
 | `503` | Finnhub unreachable, rate-limited, rejected the key, or no key configured |
 | `400` | Symbol isn't 1–15 letters, digits, `.` or `-` |
 
-Set a free API key in `FINNHUB_API_KEY` (shell environment, or a git-ignored `.env` file next to
-`docker-compose.yml`). Without one the service still runs; prices are just entered manually. In the browser UI,
+Paste a free API key after `FINNHUB_API_KEY=` in `local.env` (git-ignored). Docker Compose passes it to the
+container via `env_file`, and the app imports it directly when run with `mvn spring-boot:run` or from an IDE.
+A `FINNHUB_API_KEY` environment variable also works. Without a key the service still runs; prices are just
+entered manually. In the browser UI,
 equity rows have a ↻ button that fills in the price from this endpoint.
 
 ## Kafka
