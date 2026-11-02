@@ -24,6 +24,13 @@ management:
       exposure:
         include: health,info
 
+market-data:
+  finnhub:
+    base-url: https://finnhub.io/api/v1
+    # Free key from https://finnhub.io; without one, price lookups return 503 and prices are entered manually
+    api-key: ${FINNHUB_API_KEY:}
+    timeout: 3s
+
 # --- Margin model parameters (illustrative values, not a regulatory model) ---
 margin:
   margin-call-topic: margin-calls

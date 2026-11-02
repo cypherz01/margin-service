@@ -61,6 +61,24 @@ Response:
 
 Invalid requests return `400` with an RFC 7807 `application/problem+json` body.
 
+### Live share prices
+
+`GET /api/v1/quotes/{symbol}` returns the latest price for a ticker, via [Finnhub](https://finnhub.io):
+
+```json
+{ "symbol": "AAPL", "price": 189.84, "asOf": "2025-11-02T16:00:00Z" }
+```
+
+| Status | Meaning |
+|---|---|
+| `404` | Finnhub doesn't know the symbol |
+| `503` | Finnhub unreachable, rate-limited, rejected the key, or no key configured |
+| `400` | Symbol isn't 1–15 letters, digits, `.` or `-` |
+
+Set a free API key in `FINNHUB_API_KEY` (shell environment, or a git-ignored `.env` file next to
+`docker-compose.yml`). Without one the service still runs; prices are just entered manually. In the browser UI,
+equity rows have a ↻ button that fills in the price from this endpoint.
+
 ## Kafka
 
 - Topic: `margin-calls` (created on startup, 3 partitions)

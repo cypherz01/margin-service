@@ -32,7 +32,9 @@
                     <tbody id="positions"></tbody>
                 </table>
             </div>
-            <p class="hint">Negative quantity = short. Longs and shorts both consume margin.</p>
+            <p class="hint">Negative quantity = short. Longs and shorts both consume margin.
+                For equities, enter the ticker as the instrument and press &#x21bb; to fetch the live price.</p>
+            <p id="quote-status" class="quote-status" aria-live="polite" hidden></p>
         </section>
 
         <section>
@@ -94,7 +96,12 @@
             </select>
         </td>
         <td><input name="quantity" type="number" step="any" required class="num" aria-label="Quantity"></td>
-        <td><input name="price" type="number" step="any" min="0" required class="num" aria-label="Price"></td>
+        <td>
+            <div class="price-cell">
+                <input name="price" type="number" step="any" min="0" required class="num" aria-label="Price">
+                <button type="button" class="quote" title="Get live share price" aria-label="Get live share price">&#x21bb;</button>
+            </div>
+        </td>
         <td><button type="button" class="remove" aria-label="Remove row">&times;</button></td>
     </tr>
 </template>

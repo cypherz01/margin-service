@@ -1,6 +1,7 @@
 'use strict';
 
 const API_URL = '/api/v1/margin/calculations';
+const QUOTE_URL = '/api/v1/quotes';
 
 const form = document.getElementById('calc-form');
 const positionsBody = document.getElementById('positions');
@@ -36,7 +37,16 @@ function addRow(kind, values = {}) {
         if (field) field.value = value;
     }
     body.appendChild(row);
+    if (kind === 'position') syncQuoteButton(row);
     return row;
+}
+
+/** Live prices come from an equity quote feed, so the lookup is only offered for equity rows. */
+function syncQuoteButton(row) {
+    const isEquity = row.querySelector('[name=assetClass]').value === 'EQUITY';
+    const button = row.querySelector('button.quote');
+    button.disabled = !isEquity;
+    button.title = isEquity ? 'Get live share price' : 'Live prices are available for equities only';
 }
 
 function clearRows() {
@@ -50,8 +60,63 @@ document.querySelectorAll('[data-add]').forEach(button =>
 form.addEventListener('click', event => {
     if (event.target.classList.contains('remove')) {
         event.target.closest('tr').remove();
+    } else if (event.target.classList.contains('quote')) {
+        fetchQuote(event.target.closest('tr'));
     }
 });
+
+form.addEventListener('change', event => {
+    if (event.target.name === 'assetClass') syncQuoteButton(event.target.closest('tr'));
+});
+
+// --- Live prices ----------------------------------------------------------
+
+const quoteStatus = document.getElementById('quote-status');
+
+function showQuoteStatus(message, isError) {
+    quoteStatus.textContent = message;
+    quoteStatus.classList.toggle('error', isError);
+    quoteStatus.hidden = false;
+}
+
+async function fetchQuote(row) {
+    const symbolInput = row.querySelector('[name=instrumentId]');
+    const priceInput = row.querySelector('[name=price]');
+    const button = row.querySelector('button.quote');
+    const symbol = symbolInput.value.trim();
+    if (!symbol) {
+        showQuoteStatus('Enter a ticker symbol in the Instrument column first.', true);
+        symbolInput.focus();
+        return;
+    }
+
+    button.disabled = true;
+    button.classList.add('loading');
+    try {
+        const response = await fetch(`${QUOTE_URL}/${encodeURIComponent(symbol)}`, {
+            headers: { Accept: 'application/json, application/problem+json' },
+        });
+        const body = await response.json().catch(() => null);
+        if (response.ok) {
+            const asOf = new Date(body.asOf).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            priceInput.value = body.price;
+            priceInput.classList.remove('invalid');
+            priceInput.title = `Live price for ${body.symbol} as of ${asOf}`;
+            showQuoteStatus(`${body.symbol}: ${money.format(body.price)} as of ${asOf}`, false);
+        } else if (response.status === 404) {
+            showQuoteStatus(`No price found for "${symbol}". Check the ticker, or enter the price manually.`, true);
+        } else if (response.status === 400) {
+            showQuoteStatus(`"${symbol}" is not a valid ticker symbol.`, true);
+        } else {
+            showQuoteStatus(body?.detail ?? 'Live prices are unavailable right now; enter the price manually.', true);
+        }
+    } catch (err) {
+        showQuoteStatus('Cannot reach the margin service.', true);
+    } finally {
+        button.classList.remove('loading');
+        syncQuoteButton(row);
+    }
+}
 
 document.getElementById('load-example').addEventListener('click', () => {
     clearRows();

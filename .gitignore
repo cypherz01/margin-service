@@ -10,6 +10,9 @@ target/
 .classpath
 .settings/
 
+# Local secrets (e.g. FINNHUB_API_KEY)
+.env
+
 # OS
 .DS_Store
 

@@ -1,5 +1,7 @@
 package com.example.margin.api;
 
+import com.example.margin.marketdata.MarketDataUnavailableException;
+import com.example.margin.marketdata.QuoteNotFoundException;
 import com.example.margin.messaging.MarginCallPublishException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -31,5 +33,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail handleMarginCallPublish(MarginCallPublishException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
                 "Margin call could not be published; retry the request");
+    }
+
+    /** Ticker symbol the market-data provider doesn't recognise. */
+    @ExceptionHandler(QuoteNotFoundException.class)
+    ProblemDetail handleQuoteNotFound(QuoteNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    /** Provider down, rate-limited or not configured; the reason is logged, not returned to clients. */
+    @ExceptionHandler(MarketDataUnavailableException.class)
+    ProblemDetail handleMarketDataUnavailable(MarketDataUnavailableException ex) {
+        logger.warn(ex.getMessage(), ex);
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "Live prices are temporarily unavailable; enter the price manually");
     }
 }
