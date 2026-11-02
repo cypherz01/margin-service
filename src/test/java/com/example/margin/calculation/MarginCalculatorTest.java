@@ -11,6 +11,7 @@ import com.example.margin.domain.MarginResult;
 import com.example.margin.domain.Portfolio;
 import com.example.margin.domain.Position;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +34,8 @@ class MarginCalculatorTest {
                     CollateralType.GOVERNMENT_BOND, new BigDecimal("0.02"),
                     CollateralType.CORPORATE_BOND, new BigDecimal("0.10"),
                     CollateralType.EQUITY, new BigDecimal("0.25")),
-            "margin-calls");
+            "margin-calls",
+            Duration.ofSeconds(5));
 
     private final MarginCalculator calculator = new MarginCalculator(PROPERTIES);
 
@@ -97,7 +99,8 @@ class MarginCalculatorTest {
                     Map.of(AssetClass.EQUITY, new BigDecimal("0.15")),
                     new BigDecimal("0.75"),
                     Map.of(CollateralType.CASH, BigDecimal.ZERO),
-                    "margin-calls"));
+                    "margin-calls",
+                    Duration.ofSeconds(5)));
 
             assertThatThrownBy(() -> incomplete.calculate(
                     portfolio(List.of(position(AssetClass.COMMODITY, "1", "1")), List.of())))

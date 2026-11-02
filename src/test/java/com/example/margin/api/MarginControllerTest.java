@@ -6,11 +6,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.margin.domain.AssetClass;
 import com.example.margin.domain.MarginResult;
+import com.example.margin.messaging.MarginCallPublishException;
 import com.example.margin.service.MarginService;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,25 @@ class MarginControllerTest {
                 p.accountId().equals("ACC-1")
                         && p.positions().size() == 1
                         && p.positions().getFirst().assetClass() == AssetClass.EQUITY));
+    }
+
+    @Test
+    void returns503ProblemWhenMarginCallCannotBePublished() throws Exception {
+        when(marginService.evaluate(any()))
+                .thenThrow(new MarginCallPublishException("Failed to publish margin call evt-1", null));
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+                        {
+                          "accountId": "ACC-1",
+                          "positions": [
+                            {"instrumentId": "AAPL", "assetClass": "EQUITY", "quantity": 100, "price": 50}
+                          ],
+                          "collateral": [ {"type": "CASH", "marketValue": 500} ]
+                        }
+                        """))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(503));
     }
 
     @Test

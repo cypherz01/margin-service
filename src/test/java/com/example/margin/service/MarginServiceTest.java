@@ -1,7 +1,9 @@
 package com.example.margin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +12,7 @@ import com.example.margin.calculation.MarginCalculator;
 import com.example.margin.domain.MarginCallEvent;
 import com.example.margin.domain.MarginResult;
 import com.example.margin.domain.Portfolio;
+import com.example.margin.messaging.MarginCallPublishException;
 import com.example.margin.messaging.MarginCallPublisher;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -77,5 +80,14 @@ class MarginServiceTest {
         service.evaluate(portfolio);
 
         verify(publisher, never()).publish(any());
+    }
+
+    @Test
+    void propagatesPublishFailureSoCallerIsNotToldTheCallWasRaised() {
+        when(calculator.calculate(portfolio)).thenReturn(result(true, "250.00"));
+        MarginCallPublishException failure = new MarginCallPublishException("broker unavailable", null);
+        doThrow(failure).when(publisher).publish(any());
+
+        assertThatThrownBy(() -> service.evaluate(portfolio)).isSameAs(failure);
     }
 }
