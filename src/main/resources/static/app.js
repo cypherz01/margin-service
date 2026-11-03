@@ -77,6 +77,15 @@ form.addEventListener('click', event => {
 
 form.addEventListener('change', event => {
     if (event.target.name === 'assetClass') syncQuoteButton(event.target.closest('tr'));
+    if (event.target.name === 'currency') flagLivePricesInOtherCurrencies();
+});
+
+// Typing a price by hand replaces any live price, so it no longer carries the quote's currency
+form.addEventListener('input', event => {
+    if (event.target.name === 'price' && event.target.dataset.quoteCurrency) {
+        delete event.target.dataset.quoteCurrency;
+        flagLivePricesInOtherCurrencies(); // clears this field's flag, and the warning once none remain
+    }
 });
 
 // --- Live prices ----------------------------------------------------------
@@ -109,10 +118,21 @@ async function fetchQuote(row) {
         const body = await response.json().catch(() => null);
         if (response.ok) {
             const asOf = new Date(body.asOf).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            const quoted = `${moneyIn(body.currency).format(body.price)} as of ${asOf}`;
+            const portfolioCurrency = form.currency.value;
+            if (body.currency !== portfolioCurrency) {
+                // The service does no FX conversion, so a price in another currency would be silently wrong
+                showQuoteStatus(`${body.symbol} is quoted in ${body.currency} (${quoted}), but this portfolio is in `
+                    + `${portfolioCurrency}. Switch the currency to ${body.currency}, or enter a `
+                    + `${portfolioCurrency} price manually.`, true);
+                return;
+            }
             priceInput.value = body.price;
+            priceInput.dataset.quoteCurrency = body.currency;
+            priceInput.setCustomValidity('');
             priceInput.classList.remove('invalid');
             priceInput.title = `Live price for ${body.symbol} as of ${asOf}`;
-            showQuoteStatus(`${body.symbol}: ${plainMoney.format(body.price)} as of ${asOf}`, false);
+            showQuoteStatus(`${body.symbol}: ${quoted}`, false);
         } else if (response.status === 404) {
             showQuoteStatus(`No price found for "${symbol}". Check the ticker, or enter the price manually.`, true);
         } else if (response.status === 400) {
@@ -125,6 +145,28 @@ async function fetchQuote(row) {
     } finally {
         button.classList.remove('loading');
         syncQuoteButton(row);
+    }
+}
+
+/** After a currency switch, live prices fetched in the old currency must be re-entered before calculating. */
+function flagLivePricesInOtherCurrencies() {
+    const portfolioCurrency = form.currency.value;
+    const stale = [];
+    positionsBody.querySelectorAll('[name=price]').forEach(priceInput => {
+        const quoteCurrency = priceInput.dataset.quoteCurrency;
+        const mismatch = Boolean(quoteCurrency) && quoteCurrency !== portfolioCurrency;
+        const symbol = priceInput.closest('tr').querySelector('[name=instrumentId]').value.trim();
+        priceInput.setCustomValidity(mismatch
+            ? `The price for ${symbol} is a live ${quoteCurrency} price, but the portfolio is in ${portfolioCurrency}.`
+            : '');
+        priceInput.classList.toggle('invalid', mismatch);
+        if (mismatch) stale.push(symbol);
+    });
+    if (stale.length) {
+        showQuoteStatus(`${stale.join(', ')}: live price in another currency. Switch back, or re-enter the `
+            + `price in ${portfolioCurrency}.`, true);
+    } else if (!quoteStatus.hidden && quoteStatus.classList.contains('error')) {
+        quoteStatus.hidden = true;
     }
 }
 
@@ -148,15 +190,41 @@ function readRows(body, numericFields) {
     });
 }
 
-/** Browser-side checks only; the server remains the source of truth for validation. */
+/**
+ * Browser-side checks only; the server remains the source of truth for validation.
+ * Highlights invalid fields and returns one message per distinct problem (empty when valid).
+ */
 function validate() {
-    let valid = true;
+    const problems = new Set();
     form.querySelectorAll('input').forEach(input => {
         const ok = input.checkValidity();
         input.classList.toggle('invalid', !ok);
-        valid &&= ok;
+        if (!ok) problems.add(problemFor(input));
     });
-    return valid;
+    return [...problems];
+}
+
+function problemFor(input) {
+    const { validity } = input;
+    if (validity.customError) return input.validationMessage;
+    switch (input.name) {
+        case 'accountId':
+            return validity.valueMissing
+                ? 'Enter an account ID.'
+                : "Account ID can only contain letters, digits, '.', '_', ':' or '-' (up to 64 characters, no spaces).";
+        case 'instrumentId':
+            return 'Every position needs an instrument.';
+        case 'quantity':
+            return 'Every position needs a quantity.';
+        case 'price':
+            return validity.rangeUnderflow ? 'Prices cannot be negative.' : 'Every position needs a price.';
+        case 'marketValue':
+            return validity.rangeUnderflow
+                ? 'Collateral market values cannot be negative.'
+                : 'Every collateral item needs a market value.';
+        default:
+            return input.validationMessage;
+    }
 }
 
 function buildRequest() {
@@ -172,8 +240,13 @@ function buildRequest() {
 
 form.addEventListener('submit', async event => {
     event.preventDefault();
-    if (!validate()) {
-        showError('Check the highlighted fields', 'Every row needs a value in each column; prices and market values cannot be negative.');
+    const problems = validate();
+    if (problems.length === 1) {
+        showError('Check the highlighted field', problems[0]);
+        return;
+    }
+    if (problems.length > 1) {
+        showError('Check the highlighted fields', '', problems);
         return;
     }
 
