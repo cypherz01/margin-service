@@ -129,6 +129,19 @@ equity rows have a ↻ button that fills in the price from this endpoint.
 }
 ```
 
+## Observability
+
+| Concern | How |
+|---|---|
+| Metrics | Prometheus format at `/actuator/prometheus`: `margin_calculations_total{outcome,currency}`, `margin_call_amount`, `margin_call_publish_failures_total`, plus HTTP, JVM and Kafka producer metrics |
+| Tracing | Micrometer Tracing (OpenTelemetry bridge); `traceId`/`spanId` on every log line, and the W3C `traceparent` header on each Kafka record so consumers continue the trace |
+| Correlation IDs | `X-Correlation-Id` is accepted (if safe: ≤ 64 of `A-Z a-z 0-9 . _ -`) or generated, logged on every line and echoed in the response |
+| Audit trail | Every evaluation is logged to the `audit.margin` logger with totals, outcome and margin-call event ID as structured fields; a call that could not be published is logged as **not raised** |
+| Logs | Plain text locally; JSON ([Elastic Common Schema](https://www.elastic.co/guide/en/ecs/current/index.html)) with the `json-logs` profile, which Docker Compose enables |
+| Health | `/actuator/health/liveness` and `/actuator/health/readiness` for Kubernetes probes |
+
+In production, route `audit.margin` to append-only storage and keep `/actuator/prometheus` on an internal port.
+
 ## Running locally
 
 Requires Java 21, Maven 3.9+, Docker.
@@ -167,9 +180,10 @@ mvn verify   # + integration tests (*IT): HTTP → service → embedded Kafka br
 | Test | Scope |
 |---|---|
 | `MarginCalculatorTest` | Pure model: rates, shorts, haircuts, call thresholds (parameterised) |
-| `MarginServiceTest` | Mockito: publishes event only on breach, fixed `Clock` |
+| `MarginServiceTest` | Mockito: publishes event only on breach, fixed `Clock`, metrics and audit records |
+| `CorrelationIdFilterTest` | Correlation IDs reused, generated, or replaced when unsafe (log injection) |
 | `MarginControllerTest` | `@WebMvcTest`: JSON mapping, validation → 400 |
-| `MarginApiKafkaIT` | `@SpringBootTest` + `@EmbeddedKafka`: full request → event on topic |
+| `MarginApiKafkaIT` | `@SpringBootTest` + `@EmbeddedKafka`: full request → event on topic (with trace header), metrics, health probes |
 
 Integration tests use an embedded broker, so CI needs no Docker for the test stage.
 
