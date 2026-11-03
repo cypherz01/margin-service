@@ -118,8 +118,11 @@ in [0, 1], so a typo like `haircut: 25` stops the service from starting instead 
 `GET /api/v1/quotes/{symbol}` returns the latest price for a ticker, via [Finnhub](https://finnhub.io):
 
 ```json
-{ "symbol": "AAPL", "price": 189.84, "asOf": "2025-11-02T16:00:00Z" }
+{ "symbol": "AAPL", "price": 189.84, "currency": "USD", "asOf": "2025-11-02T16:00:00Z" }
 ```
+
+Finnhub's quote endpoint covers US listings, so prices are in `USD`. The service does no FX conversion, so the UI
+only fills in a live price when the portfolio currency matches the quote's.
 
 | Status | Meaning |
 |---|---|
@@ -130,8 +133,7 @@ in [0, 1], so a typo like `haircut: 25` stops the service from starting instead 
 Paste a free API key after `FINNHUB_API_KEY=` in `local.env` (git-ignored). Docker Compose passes it to the
 container via `env_file`, and the app imports it directly when run with `mvn spring-boot:run` or from an IDE.
 A `FINNHUB_API_KEY` environment variable also works. Without a key the service still runs; prices are just
-entered manually. In the browser UI,
-equity rows have a ↻ button that fills in the price from this endpoint.
+entered manually. In the browser UI, equity rows have a ↻ button that fills in the price from this endpoint.
 
 ## Kafka
 
