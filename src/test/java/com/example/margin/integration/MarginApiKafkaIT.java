@@ -66,6 +66,7 @@ class MarginApiKafkaIT {
     private static Map<String, Object> request(String accountId, int cashCollateral) {
         return Map.of(
                 "accountId", accountId,
+                "currency", "USD",
                 "positions", List.of(Map.of(
                         "instrumentId", "AAPL", "assetClass", "EQUITY", "quantity", 100, "price", 50)),
                 "collateral", List.of(Map.of("type", "CASH", "marketValue", cashCollateral)));
@@ -79,6 +80,7 @@ class MarginApiKafkaIT {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().currency().getCurrencyCode()).isEqualTo("USD");
         assertThat(response.getBody().initialMargin()).isEqualByComparingTo("750");
         assertThat(response.getBody().marginCallRequired()).isTrue();
         assertThat(response.getBody().marginCallAmount()).isEqualByComparingTo("250");
@@ -90,6 +92,7 @@ class MarginApiKafkaIT {
         JsonNode event = objectMapper.readTree(record.value());
         assertThat(record.key()).isEqualTo(accountId);
         assertThat(event.get("accountId").asText()).isEqualTo(accountId);
+        assertThat(event.get("currency").asText()).isEqualTo("USD");
         assertThat(event.get("callAmount").decimalValue()).isEqualByComparingTo("250");
         assertThat(event.get("eventId").asText()).isNotBlank();
     }

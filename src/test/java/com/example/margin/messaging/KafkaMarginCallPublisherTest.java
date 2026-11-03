@@ -12,6 +12,7 @@ import com.example.margin.domain.MarginCallEvent;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Currency;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +39,7 @@ class KafkaMarginCallPublisherTest {
     private static final String TOPIC = "margin-calls";
 
     private static final MarginCallEvent EVENT = new MarginCallEvent(
-            "evt-1", "ACC-1",
+            "evt-1", "ACC-1", Currency.getInstance("USD"),
             new BigDecimal("250.00"), new BigDecimal("750.00"), new BigDecimal("562.50"),
             new BigDecimal("500.00"), Instant.parse("2026-11-02T12:00:00Z"));
 

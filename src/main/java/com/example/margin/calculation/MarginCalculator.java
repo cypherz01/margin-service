@@ -7,6 +7,7 @@ import com.example.margin.domain.Portfolio;
 import com.example.margin.domain.Position;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Currency;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,11 +20,15 @@ import org.springframework.stereotype.Component;
  *   <li>A margin call is required when collateral value is strictly below maintenance margin;
  *       the call amount restores collateral to the initial margin.</li>
  * </ul>
+ *
+ * <p>Results are rounded half-even (banker's rounding) to the currency's minor unit: 2 decimals for USD,
+ * 0 for JPY, 3 for KWD. Intermediate sums keep full precision so rounding is applied once, not per position.
  */
 @Component
 public class MarginCalculator {
 
-    private static final int SCALE = 2;
+    /** Used for currencies with no ISO minor unit, such as XAU (gold). */
+    private static final int DEFAULT_SCALE = 2;
     private static final RoundingMode ROUNDING = RoundingMode.HALF_EVEN;
 
     private final MarginProperties properties;
@@ -33,6 +38,7 @@ public class MarginCalculator {
     }
 
     public MarginResult calculate(Portfolio portfolio) {
+        int scale = scaleFor(portfolio.currency());
         BigDecimal grossExposure = BigDecimal.ZERO;
         BigDecimal initialMargin = BigDecimal.ZERO;
         for (Position position : portfolio.positions()) {
@@ -49,16 +55,17 @@ public class MarginCalculator {
                     collateral.marketValue().multiply(BigDecimal.ONE.subtract(haircutFor(collateral))));
         }
 
-        initialMargin = round(initialMargin);
-        maintenanceMargin = round(maintenanceMargin);
-        collateralValue = round(collateralValue);
+        initialMargin = round(initialMargin, scale);
+        maintenanceMargin = round(maintenanceMargin, scale);
+        collateralValue = round(collateralValue, scale);
 
         boolean callRequired = collateralValue.compareTo(maintenanceMargin) < 0;
-        BigDecimal callAmount = callRequired ? initialMargin.subtract(collateralValue) : round(BigDecimal.ZERO);
+        BigDecimal callAmount = callRequired ? initialMargin.subtract(collateralValue) : round(BigDecimal.ZERO, scale);
 
         return new MarginResult(
                 portfolio.accountId(),
-                round(grossExposure),
+                portfolio.currency(),
+                round(grossExposure, scale),
                 initialMargin,
                 maintenanceMargin,
                 collateralValue,
@@ -83,7 +90,12 @@ public class MarginCalculator {
         return haircut;
     }
 
-    private static BigDecimal round(BigDecimal value) {
-        return value.setScale(SCALE, ROUNDING);
+    private static int scaleFor(Currency currency) {
+        int digits = currency.getDefaultFractionDigits();
+        return digits < 0 ? DEFAULT_SCALE : digits;
+    }
+
+    private static BigDecimal round(BigDecimal value, int scale) {
+        return value.setScale(scale, ROUNDING);
     }
 }

@@ -33,6 +33,7 @@ class MarginApiKafkaUnavailableIT {
     private static Map<String, Object> request(int cashCollateral) {
         return Map.of(
                 "accountId", "ACC-1",
+                "currency", "USD",
                 "positions", List.of(Map.of(
                         "instrumentId", "AAPL", "assetClass", "EQUITY", "quantity", 100, "price", 50)),
                 "collateral", List.of(Map.of("type", "CASH", "marketValue", cashCollateral)));
