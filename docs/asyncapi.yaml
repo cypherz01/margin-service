@@ -1,0 +1,102 @@
+asyncapi: 3.0.0
+info:
+  title: Margin Service events
+  version: 1.0.0
+  description: |
+    Events published by margin-service. A margin call is published, and acknowledged by all in-sync replicas
+    (`acks=all`, idempotent producer), before the HTTP request that raised it returns 200.
+
+    Delivery is at-least-once: if the broker acknowledges after the publish timeout, the client is told to retry
+    and a second event with a new `eventId` can be published. Consumers should be idempotent; the planned fix
+    (transactional outbox and idempotency keys) is described in docs/adr/0006.
+
+defaultContentType: application/json
+
+servers:
+  local:
+    host: localhost:29092
+    protocol: kafka
+    description: Docker Compose broker (PLAINTEXT, local development only)
+
+channels:
+  marginCalls:
+    address: margin-calls
+    description: |
+      One event per margin call raised. 3 partitions; records are keyed by `accountId`, so all calls for an
+      account are delivered in order.
+    messages:
+      marginCall:
+        $ref: '#/components/messages/MarginCall'
+
+operations:
+  publishMarginCall:
+    action: send
+    channel:
+      $ref: '#/channels/marginCalls'
+    summary: Raised when collateral after haircuts falls below maintenance margin.
+    messages:
+      - $ref: '#/channels/marginCalls/messages/marginCall'
+
+components:
+  messages:
+    MarginCall:
+      name: MarginCall
+      title: Margin call issued
+      contentType: application/json
+      bindings:
+        kafka:
+          key:
+            type: string
+            description: The account ID
+          bindingVersion: 0.5.0
+      headers:
+        type: object
+        properties:
+          traceparent:
+            type: string
+            description: W3C Trace Context of the request that raised the call, so consumers can continue the trace.
+            examples: ["00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"]
+      payload:
+        $ref: '#/components/schemas/MarginCallEvent'
+      examples:
+        - name: shortfall
+          payload:
+            eventId: 9b1c6f3e-2c1d-4b8e-9a51-6f0e7d2c4a10
+            accountId: ACC-1
+            currency: USD
+            callAmount: 250.00
+            initialMargin: 750.00
+            maintenanceMargin: 562.50
+            collateralValue: 500.00
+            issuedAt: "2026-11-02T12:00:00Z"
+
+  schemas:
+    MarginCallEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, accountId, currency, callAmount, initialMargin, maintenanceMargin, collateralValue, issuedAt]
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: Unique per published event.
+        accountId:
+          type: string
+          pattern: '^[A-Za-z0-9._:-]{1,64}$'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: ISO 4217 code; every amount below is in this currency, rounded to its minor unit.
+        callAmount:
+          type: number
+          description: Amount to post to restore collateral to initial margin.
+        initialMargin:
+          type: number
+        maintenanceMargin:
+          type: number
+        collateralValue:
+          type: number
+          description: Collateral market value after haircuts.
+        issuedAt:
+          type: string
+          format: date-time

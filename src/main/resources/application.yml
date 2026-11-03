@@ -51,6 +51,14 @@ logging:
     # Plain-text logs: prefix each line with trace, span and correlation IDs
     correlation: "[%X{traceId:-},%X{spanId:-},%X{correlationId:-}] "
 
+springdoc:
+  # Document only the responses declared on each operation, not every @ExceptionHandler on every endpoint
+  override-with-generic-response: false
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
 market-data:
   finnhub:
     base-url: https://finnhub.io/api/v1

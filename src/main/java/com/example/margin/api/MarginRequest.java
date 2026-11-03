@@ -5,6 +5,7 @@ import com.example.margin.domain.Collateral;
 import com.example.margin.domain.CollateralType;
 import com.example.margin.domain.Portfolio;
 import com.example.margin.domain.Position;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
@@ -32,6 +33,8 @@ public record MarginRequest(
         @Pattern(regexp = MarginRequest.ACCOUNT_ID_PATTERN,
                 message = "must be 1-64 letters, digits, '.', '_', ':' or '-'")
         String accountId,
+        @Schema(description = "ISO 4217 reporting currency; every line must be in it", example = "USD",
+                type = "string")
         @NotNull Currency currency,
         @NotNull @Size(max = MarginRequest.MAX_POSITIONS) List<@Valid @NotNull PositionDto> positions,
         @NotNull @Size(max = MarginRequest.MAX_COLLATERAL) List<@Valid @NotNull CollateralDto> collateral) {
@@ -48,8 +51,10 @@ public record MarginRequest(
     public record PositionDto(
             @NotBlank @Size(max = 64) String instrumentId,
             @NotNull AssetClass assetClass,
+            @Schema(description = "Signed: negative = short", example = "100")
             @NotNull @Digits(integer = 12, fraction = 6) BigDecimal quantity,
             @NotNull @PositiveOrZero @Digits(integer = 12, fraction = 8) BigDecimal price,
+            @Schema(description = "Defaults to the portfolio currency", example = "USD", type = "string")
             Currency currency) {
     }
 
@@ -60,6 +65,7 @@ public record MarginRequest(
     public record CollateralDto(
             @NotNull CollateralType type,
             @NotNull @PositiveOrZero @Digits(integer = 15, fraction = 2) BigDecimal marketValue,
+            @Schema(description = "Defaults to the portfolio currency", example = "USD", type = "string")
             Currency currency) {
     }
 
