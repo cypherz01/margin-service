@@ -4,7 +4,8 @@ WORKDIR /workspace
 COPY pom.xml .
 RUN mvn -B -q dependency:go-offline
 COPY src ./src
-RUN mvn -B -q package -DskipTests
+# Tests and quality gates (Checkstyle, JaCoCo) run in CI via `mvn verify`; the image build only packages
+RUN mvn -B -q package -DskipTests -Dcheckstyle.skip -Djacoco.skip
 
 # ---- Runtime stage ----
 FROM eclipse-temurin:21-jre

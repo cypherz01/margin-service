@@ -12,6 +12,7 @@ import com.example.margin.domain.Portfolio;
 import com.example.margin.domain.Position;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Currency;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -37,18 +38,21 @@ class MarginCalculatorTest {
             "margin-calls",
             Duration.ofSeconds(5));
 
+    private static final Currency USD = Currency.getInstance("USD");
+    private static final Currency JPY = Currency.getInstance("JPY");
+
     private final MarginCalculator calculator = new MarginCalculator(PROPERTIES);
 
     private static Position position(AssetClass assetClass, String qty, String price) {
-        return new Position("INST-" + assetClass, assetClass, new BigDecimal(qty), new BigDecimal(price));
+        return new Position("INST-" + assetClass, assetClass, new BigDecimal(qty), new BigDecimal(price), USD);
     }
 
     private static Collateral cash(String amount) {
-        return new Collateral(CollateralType.CASH, new BigDecimal(amount));
+        return new Collateral(CollateralType.CASH, new BigDecimal(amount), USD);
     }
 
     private static Portfolio portfolio(List<Position> positions, List<Collateral> collateral) {
-        return new Portfolio("ACC-1", positions, collateral);
+        return new Portfolio("ACC-1", USD, positions, collateral);
     }
 
     @Nested
@@ -118,8 +122,8 @@ class MarginCalculatorTest {
             MarginResult result = calculator.calculate(portfolio(
                     List.of(),
                     List.of(cash("1000"),                                                         // 1,000
-                            new Collateral(CollateralType.GOVERNMENT_BOND, new BigDecimal("1000")), // 980
-                            new Collateral(CollateralType.EQUITY, new BigDecimal("1000")))));      // 750
+                            new Collateral(CollateralType.GOVERNMENT_BOND, new BigDecimal("1000"), USD), // 980
+                            new Collateral(CollateralType.EQUITY, new BigDecimal("1000"), USD))));      // 750
 
             assertThat(result.collateralValue()).isEqualByComparingTo("2730");
         }
@@ -147,6 +151,36 @@ class MarginCalculatorTest {
             assertThat(result.marginCallRequired()).isEqualTo(callRequired);
             assertThat(result.marginCallAmount()).isEqualByComparingTo(callAmount);
             assertThat(result.excess()).isEqualByComparingTo(excess);
+        }
+    }
+
+    @Nested
+    @DisplayName("currency")
+    class Currencies {
+
+        @Test
+        void reportsResultInPortfolioCurrencyRoundedToTwoDecimalsForUsd() {
+            MarginResult result = calculator.calculate(
+                    portfolio(List.of(position(AssetClass.EQUITY, "1", "1001")), List.of()));
+
+            assertThat(result.currency()).isEqualTo(USD);
+            assertThat(result.initialMargin()).isEqualByComparingTo("150.15").hasScaleOf(2);
+            assertThat(result.maintenanceMargin()).isEqualByComparingTo("112.61"); // 112.6125, half-even
+        }
+
+        @Test
+        void roundsToWholeUnitsForCurrencyWithNoMinorUnit() {
+            Portfolio yen = new Portfolio("ACC-JP", JPY,
+                    List.of(new Position("7203.T", AssetClass.EQUITY, BigDecimal.ONE, new BigDecimal("1001"), JPY)),
+                    List.of(new Collateral(CollateralType.CASH, new BigDecimal("100"), JPY)));
+
+            MarginResult result = calculator.calculate(yen);
+
+            assertThat(result.currency()).isEqualTo(JPY);
+            assertThat(result.initialMargin()).isEqualByComparingTo("150").hasScaleOf(0);      // 150.15
+            assertThat(result.maintenanceMargin()).isEqualByComparingTo("113").hasScaleOf(0);  // 112.6125
+            assertThat(result.marginCallRequired()).isTrue();
+            assertThat(result.marginCallAmount()).isEqualByComparingTo("50").hasScaleOf(0);
         }
     }
 }

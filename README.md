@@ -1,9 +1,32 @@
 # margin-service
 
+[![CI](https://github.com/cypherz01/margin-service/actions/workflows/ci.yml/badge.svg)](https://github.com/cypherz01/margin-service/actions/workflows/ci.yml)
+![Java 21](https://img.shields.io/badge/Java-21-007396)
+![Spring Boot 3.4](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F)
+![Kafka](https://img.shields.io/badge/Apache%20Kafka-events-231F20)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3-6BA539)](#documentation)
+[![AsyncAPI](https://img.shields.io/badge/AsyncAPI-3.0-4F5BD5)](docs/asyncapi.yaml)
+
 Spring Boot REST service that calculates **margin and collateral requirements** for a portfolio of positions,
 and publishes **margin-call events to Kafka** when collateral falls below the maintenance margin.
 
 Built test-first with JUnit 5 and Mockito; integration tests exercise the REST API and Kafka end to end.
+
+## Documentation
+
+| What | Where |
+|---|---|
+| REST API (OpenAPI 3) | Swagger UI at http://localhost:8080/swagger-ui.html, spec at `/v3/api-docs` |
+| Kafka events (AsyncAPI 3) | [`docs/asyncapi.yaml`](docs/asyncapi.yaml) (paste into [studio.asyncapi.com](https://studio.asyncapi.com) to browse) |
+| Architecture and request flow | [`docs/architecture.md`](docs/architecture.md) (component and sequence diagrams) |
+| Design decisions | [`docs/adr/`](docs/adr/README.md): Architecture Decision Records |
+
+```mermaid
+flowchart LR
+    client([Client]) -->|REST| api[api] --> svc[service] --> calc[calculation<br/><i>pure model</i>] --> dom[(domain)]
+    svc --> port{{MarginCallPublisher}} -.-> kafkaAd[Kafka adapter] -->|acks=all| kafka[(margin-calls)]
+    api --> qport{{QuoteProvider}} -.-> finn[Finnhub adapter] --> finnhub[(Finnhub)]
+```
 
 ## Margin model
 
@@ -16,6 +39,9 @@ Built test-first with JUnit 5 and Mockito; integration tests exercise the REST A
 | Maintenance margin (MM) | IM × `maintenance-ratio` |
 | Collateral value | Σ market value × (1 − haircut) |
 | Margin call | Triggered when collateral value **<** MM; call amount = IM − collateral value |
+
+Amounts are kept at full precision until the end, then rounded half-even (banker's rounding) to the portfolio
+currency's minor unit: 2 decimals for USD/GBP/EUR, 0 for JPY, 3 for KWD.
 
 All parameters live in `src/main/resources/application.yml` under `margin.*`:
 
@@ -35,6 +61,7 @@ Maintenance ratio: 75% of IM.
 ```json
 {
   "accountId": "ACC-1",
+  "currency": "USD",
   "positions": [
     { "instrumentId": "AAPL", "assetClass": "EQUITY", "quantity": 100, "price": 50 }
   ],
@@ -49,6 +76,7 @@ Response:
 ```json
 {
   "accountId": "ACC-1",
+  "currency": "USD",
   "grossExposure": 5000.00,
   "initialMargin": 750.00,
   "maintenanceMargin": 562.50,
@@ -60,6 +88,13 @@ Response:
 ```
 
 Invalid requests return `400` with an RFC 7807 `application/problem+json` body.
+
+### Currency
+
+`currency` is the portfolio's ISO 4217 reporting currency (uppercase, e.g. `USD`, `GBP`, `JPY`) and is required.
+Each position and collateral item may carry its own `currency`; if omitted it inherits the portfolio's. A line in a
+different currency is rejected with `400`, because adding dollars to yen without an agreed FX rate would silently
+mis-state margin. The result and any margin-call event carry the currency.
 
 ### Input limits
 
@@ -108,6 +143,7 @@ equity rows have a ↻ button that fills in the price from this endpoint.
 {
   "eventId": "9b1c…",
   "accountId": "ACC-1",
+  "currency": "USD",
   "callAmount": 250.00,
   "initialMargin": 750.00,
   "maintenanceMargin": 562.50,
@@ -115,6 +151,19 @@ equity rows have a ↻ button that fills in the price from this endpoint.
   "issuedAt": "2026-11-02T12:00:00Z"
 }
 ```
+
+## Observability
+
+| Concern | How |
+|---|---|
+| Metrics | Prometheus format at `/actuator/prometheus`: `margin_calculations_total{outcome,currency}`, `margin_call_amount`, `margin_call_publish_failures_total`, plus HTTP, JVM and Kafka producer metrics |
+| Tracing | Micrometer Tracing (OpenTelemetry bridge); `traceId`/`spanId` on every log line, and the W3C `traceparent` header on each Kafka record so consumers continue the trace |
+| Correlation IDs | `X-Correlation-Id` is accepted (if safe: ≤ 64 of `A-Z a-z 0-9 . _ -`) or generated, logged on every line and echoed in the response |
+| Audit trail | Every evaluation is logged to the `audit.margin` logger with totals, outcome and margin-call event ID as structured fields; a call that could not be published is logged as **not raised** |
+| Logs | Plain text locally; JSON ([Elastic Common Schema](https://www.elastic.co/guide/en/ecs/current/index.html)) with the `json-logs` profile, which Docker Compose enables |
+| Health | `/actuator/health/liveness` and `/actuator/health/readiness` for Kubernetes probes |
+
+In production, route `audit.margin` to append-only storage and keep `/actuator/prometheus` on an internal port.
 
 ## Running locally
 
@@ -137,7 +186,7 @@ Or from the command line:
 ```bash
 curl -s localhost:8080/api/v1/margin/calculations \
   -H 'Content-Type: application/json' \
-  -d '{"accountId":"ACC-1","positions":[{"instrumentId":"AAPL","assetClass":"EQUITY","quantity":100,"price":50}],"collateral":[{"type":"CASH","marketValue":500}]}'
+  -d '{"accountId":"ACC-1","currency":"USD","positions":[{"instrumentId":"AAPL","assetClass":"EQUITY","quantity":100,"price":50}],"collateral":[{"type":"CASH","marketValue":500}]}'
 
 # Watch margin calls
 docker exec -it margin-kafka /opt/kafka/bin/kafka-console-consumer.sh \
@@ -154,24 +203,38 @@ mvn verify   # + integration tests (*IT): HTTP → service → embedded Kafka br
 | Test | Scope |
 |---|---|
 | `MarginCalculatorTest` | Pure model: rates, shorts, haircuts, call thresholds (parameterised) |
-| `MarginServiceTest` | Mockito: publishes event only on breach, fixed `Clock` |
-| `MarginControllerTest` | `@WebMvcTest`: JSON mapping, validation → 400 |
-| `MarginApiKafkaIT` | `@SpringBootTest` + `@EmbeddedKafka`: full request → event on topic |
+| `MarginServiceTest` | Mockito: publishes event only on breach, fixed `Clock`, metrics and audit records |
+| `CorrelationIdFilterTest` | Correlation IDs reused, generated, or replaced when unsafe (log injection) |
+| `MarginControllerTest` | `@WebMvcTest`: JSON mapping, validation and input limits → 400 |
+| `ArchitectureTest` | ArchUnit rules for the package structure (see Quality gates) |
+| `MarginApiKafkaIT` | `@SpringBootTest` + `@EmbeddedKafka`: full request → event on topic (with trace header), metrics, health probes |
 
 Integration tests use an embedded broker, so CI needs no Docker for the test stage.
 
+### Quality gates
+
+`mvn verify` fails the build if any of these fail:
+
+| Gate | What it enforces |
+|---|---|
+| Checkstyle (`config/checkstyle/checkstyle.xml`) | Small, defect-focused rule set: unused/star imports, missing braces, `==` on strings, switch fall-through, empty catch blocks, trailing whitespace |
+| ArchUnit (`ArchitectureTest`) | Ports and adapters: the domain is plain Java; the margin model has no web/Kafka/vendor dependencies; Kafka stays inside the messaging adapter; the Finnhub client is reached only through `QuoteProvider`; no package cycles; no field injection or `System.out` |
+| JaCoCo | ≥ 85% line and ≥ 70% branch coverage across unit **and** integration tests; HTML report in `target/site/jacoco/` |
+
 ## CI
 
-`.github/workflows/ci.yml` runs `mvn verify` on JDK 21, uploads test reports, and builds the Docker image.
+`.github/workflows/ci.yml` runs `mvn verify` (all the gates above) on JDK 21 with read-only permissions, uploads
+test and coverage reports, writes a coverage summary to the run page, and builds the Docker image.
 
 ## Project layout
 
 ```
 src/main/java/com/example/margin
-├── api/           REST controller, request DTO, problem-detail handler
+├── api/           REST controllers, request DTO, problem-detail handler, correlation-ID filter
 ├── calculation/   MarginCalculator (pure model)
-├── config/        MarginProperties (margin.*), Clock + topic beans
+├── config/        MarginProperties (margin.*), Clock, topic, market-data and OpenAPI beans
 ├── domain/        Position, Collateral, Portfolio, MarginResult, MarginCallEvent
+├── marketdata/    QuoteProvider port + Finnhub adapter
 ├── messaging/     MarginCallPublisher port + Kafka adapter
 └── service/       MarginService (calculate → publish on breach)
 ```
@@ -180,6 +243,8 @@ src/main/java/com/example/margin
 
 - Persist results / call history (Postgres + Flyway)
 - Netting of offsetting positions and per-instrument rates
-- Idempotency / dedup of margin calls per account per cycle
+- Multi-currency portfolios via FX conversion at a recorded rate
+- Transactional outbox and `Idempotency-Key` so a retried request can never raise a duplicate call
+  ([ADR 0006](docs/adr/0006-transactional-outbox-and-idempotency.md))
+- Authentication and authorisation (OAuth2 resource server, role-based access)
 - Testcontainers-based Kafka IT alongside the embedded broker
-- OpenAPI spec (springdoc)

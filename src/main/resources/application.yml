@@ -15,6 +15,9 @@ spring:
           no-cache: true
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    template:
+      # Propagates the trace context (W3C traceparent header) onto every margin-call record
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -31,7 +34,30 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true          # /actuator/health/liveness and /readiness for Kubernetes
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0         # trace every request; lower this under real production load
+
+logging:
+  pattern:
+    # Plain-text logs: prefix each line with trace, span and correlation IDs
+    correlation: "[%X{traceId:-},%X{spanId:-},%X{correlationId:-}] "
+
+springdoc:
+  # Document only the responses declared on each operation, not every @ExceptionHandler on every endpoint
+  override-with-generic-response: false
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
 
 market-data:
   finnhub:
@@ -55,3 +81,15 @@ margin:
     GOVERNMENT_BOND: 0.02
     CORPORATE_BOND: 0.10
     EQUITY: 0.25
+
+---
+# Structured JSON logs (Elastic Common Schema) for log aggregators; enabled in docker-compose.
+# Each line carries traceId, spanId, correlationId and audit key-value pairs as JSON fields.
+spring:
+  config:
+    activate:
+      on-profile: json-logs
+logging:
+  structured:
+    format:
+      console: ecs

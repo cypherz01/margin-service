@@ -12,10 +12,20 @@ const emptyView = document.getElementById('empty');
 const errorView = document.getElementById('error');
 const resultView = document.getElementById('result');
 
-const money = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const plainMoney = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Formats in the given ISO 4217 currency, using its own minor unit (e.g. 0 decimals for JPY). */
+function moneyIn(currency) {
+    try {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency });
+    } catch {
+        return plainMoney;
+    }
+}
 
 const EXAMPLE = {
     accountId: 'ACC-1',
+    currency: 'USD',
     positions: [
         { instrumentId: 'AAPL', assetClass: 'EQUITY', quantity: 100, price: 50 },
         { instrumentId: 'UST-10Y', assetClass: 'BOND', quantity: 50, price: 98.5 },
@@ -102,7 +112,7 @@ async function fetchQuote(row) {
             priceInput.value = body.price;
             priceInput.classList.remove('invalid');
             priceInput.title = `Live price for ${body.symbol} as of ${asOf}`;
-            showQuoteStatus(`${body.symbol}: ${money.format(body.price)} as of ${asOf}`, false);
+            showQuoteStatus(`${body.symbol}: ${plainMoney.format(body.price)} as of ${asOf}`, false);
         } else if (response.status === 404) {
             showQuoteStatus(`No price found for "${symbol}". Check the ticker, or enter the price manually.`, true);
         } else if (response.status === 400) {
@@ -121,6 +131,7 @@ async function fetchQuote(row) {
 document.getElementById('load-example').addEventListener('click', () => {
     clearRows();
     form.accountId.value = EXAMPLE.accountId;
+    form.currency.value = EXAMPLE.currency;
     EXAMPLE.positions.forEach(p => addRow('position', p));
     EXAMPLE.collateral.forEach(c => addRow('collateral', c));
 });
@@ -151,6 +162,7 @@ function validate() {
 function buildRequest() {
     return {
         accountId: form.accountId.value.trim(),
+        currency: form.currency.value,
         positions: readRows(positionsBody, ['quantity', 'price']),
         collateral: readRows(collateralBody, ['marketValue']),
     };
@@ -230,6 +242,7 @@ function showProblem(status, problem) {
 }
 
 function showResult(result) {
+    const money = moneyIn(result.currency);
     for (const key of ['grossExposure', 'initialMargin', 'maintenanceMargin', 'collateralValue', 'excess', 'marginCallAmount']) {
         document.getElementById(`m-${key}`).textContent = money.format(result[key]);
     }

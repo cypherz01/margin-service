@@ -14,9 +14,19 @@
 
 <main class="layout">
     <form id="calc-form" class="panel" novalidate>
-        <div class="field">
-            <label for="accountId">Account ID</label>
-            <input id="accountId" name="accountId" required placeholder="ACC-1" autocomplete="off">
+        <div class="field-row">
+            <div class="field">
+                <label for="accountId">Account ID</label>
+                <input id="accountId" name="accountId" required placeholder="ACC-1" autocomplete="off"
+                       maxlength="64" pattern="[A-Za-z0-9._:\-]{1,64}">
+            </div>
+            <div class="field">
+                <label for="currency">Currency</label>
+                <select id="currency" name="currency">
+                    <option>USD</option><option>EUR</option><option>GBP</option><option>JPY</option>
+                    <option>CHF</option><option>CAD</option><option>AUD</option>
+                </select>
+            </div>
         </div>
 
         <section>
@@ -32,7 +42,8 @@
                     <tbody id="positions"></tbody>
                 </table>
             </div>
-            <p class="hint">Negative quantity = short. Longs and shorts both consume margin.
+            <p class="hint">All prices and values are in the selected currency.
+                Negative quantity = short. Longs and shorts both consume margin.
                 For equities, enter the ticker as the instrument and press &#x21bb; to fetch the live price.</p>
             <p id="quote-status" class="quote-status" aria-live="polite" hidden></p>
         </section>

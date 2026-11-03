@@ -18,8 +18,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -29,9 +33,11 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.KafkaTestUtils;
 
 /**
- * Full-stack test: HTTP request -> controller -> service -> calculator -> Kafka (embedded broker).
+ * Full-stack test: HTTP request -> controller -> service -> calculator -> Kafka (embedded broker),
+ * plus the operational endpoints (metrics, health probes) the service exposes.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureObservability   // metrics export and tracing are off in tests unless explicitly enabled
 @EmbeddedKafka(partitions = 1, bootstrapServersProperty = "spring.kafka.bootstrap-servers")
 class MarginApiKafkaIT {
 
@@ -66,6 +72,7 @@ class MarginApiKafkaIT {
     private static Map<String, Object> request(String accountId, int cashCollateral) {
         return Map.of(
                 "accountId", accountId,
+                "currency", "USD",
                 "positions", List.of(Map.of(
                         "instrumentId", "AAPL", "assetClass", "EQUITY", "quantity", 100, "price", 50)),
                 "collateral", List.of(Map.of("type", "CASH", "marketValue", cashCollateral)));
@@ -79,6 +86,7 @@ class MarginApiKafkaIT {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().currency().getCurrencyCode()).isEqualTo("USD");
         assertThat(response.getBody().initialMargin()).isEqualByComparingTo("750");
         assertThat(response.getBody().marginCallRequired()).isTrue();
         assertThat(response.getBody().marginCallAmount()).isEqualByComparingTo("250");
@@ -90,8 +98,56 @@ class MarginApiKafkaIT {
         JsonNode event = objectMapper.readTree(record.value());
         assertThat(record.key()).isEqualTo(accountId);
         assertThat(event.get("accountId").asText()).isEqualTo(accountId);
+        assertThat(event.get("currency").asText()).isEqualTo("USD");
         assertThat(event.get("callAmount").decimalValue()).isEqualByComparingTo("250");
         assertThat(event.get("eventId").asText()).isNotBlank();
+        assertThat(record.headers().lastHeader("traceparent"))
+                .as("trace context propagated to consumers")
+                .isNotNull();
+    }
+
+    @Test
+    void echoesCorrelationIdSoCallersCanQuoteItInSupportRequests() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("X-Correlation-Id", "caller-supplied-123");
+
+        ResponseEntity<String> response = rest.exchange(URL, HttpMethod.POST,
+                new HttpEntity<>(request("ACC-" + UUID.randomUUID(), 1000), headers), String.class);
+
+        assertThat(response.getHeaders().getFirst("X-Correlation-Id")).isEqualTo("caller-supplied-123");
+    }
+
+    @Test
+    void exposesMarginMetricsForPrometheus() {
+        rest.postForEntity(URL, request("ACC-" + UUID.randomUUID(), 1000), MarginResult.class);
+
+        ResponseEntity<String> scrape = rest.getForEntity("/actuator/prometheus", String.class);
+
+        assertThat(scrape.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(scrape.getBody())
+                .contains("margin_calculations_total{")
+                .contains("http_server_requests_seconds_count{");
+    }
+
+    @Test
+    void publishesOpenApiDocumentAndSwaggerUi() {
+        ResponseEntity<String> spec = rest.getForEntity("/v3/api-docs", String.class);
+
+        assertThat(spec.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(spec.getBody())
+                .contains("Margin Service API")
+                .contains("/api/v1/margin/calculations")
+                .contains("/api/v1/quotes/{symbol}");
+        assertThat(rest.getForEntity("/swagger-ui/index.html", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void exposesKubernetesHealthProbes() {
+        assertThat(rest.getForEntity("/actuator/health/liveness", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat(rest.getForEntity("/actuator/health/readiness", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
     }
 
     @Test
