@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Currency;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,9 @@ class MarginServiceTest {
 
     private MarginService service;
 
-    private final Portfolio portfolio = new Portfolio("ACC-1", List.of(), List.of());
+    private static final Currency USD = Currency.getInstance("USD");
+
+    private final Portfolio portfolio = new Portfolio("ACC-1", USD, List.of(), List.of());
 
     @BeforeEach
     void setUp() {
@@ -51,7 +54,7 @@ class MarginServiceTest {
     }
 
     private static MarginResult result(boolean callRequired, String callAmount) {
-        return new MarginResult("ACC-1",
+        return new MarginResult("ACC-1", USD,
                 new BigDecimal("5000.00"), new BigDecimal("750.00"), new BigDecimal("562.50"),
                 new BigDecimal("500.00"), new BigDecimal("-250.00"),
                 callRequired, new BigDecimal(callAmount));
@@ -67,6 +70,7 @@ class MarginServiceTest {
         verify(publisher).publish(eventCaptor.capture());
         MarginCallEvent event = eventCaptor.getValue();
         assertThat(event.accountId()).isEqualTo("ACC-1");
+        assertThat(event.currency()).isEqualTo(USD);
         assertThat(event.callAmount()).isEqualByComparingTo("250.00");
         assertThat(event.initialMargin()).isEqualByComparingTo("750.00");
         assertThat(event.issuedAt()).isEqualTo(NOW);

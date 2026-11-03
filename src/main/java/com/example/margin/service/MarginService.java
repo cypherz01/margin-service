@@ -29,6 +29,7 @@ public class MarginService {
             publisher.publish(new MarginCallEvent(
                     UUID.randomUUID().toString(),
                     result.accountId(),
+                    result.currency(),
                     result.marginCallAmount(),
                     result.initialMargin(),
                     result.maintenanceMargin(),

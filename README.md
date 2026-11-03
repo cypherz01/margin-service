@@ -17,6 +17,9 @@ Built test-first with JUnit 5 and Mockito; integration tests exercise the REST A
 | Collateral value | Σ market value × (1 − haircut) |
 | Margin call | Triggered when collateral value **<** MM; call amount = IM − collateral value |
 
+Amounts are kept at full precision until the end, then rounded half-even (banker's rounding) to the portfolio
+currency's minor unit: 2 decimals for USD/GBP/EUR, 0 for JPY, 3 for KWD.
+
 All parameters live in `src/main/resources/application.yml` under `margin.*`:
 
 | Asset class | IM rate | | Collateral type | Haircut |
@@ -35,6 +38,7 @@ Maintenance ratio: 75% of IM.
 ```json
 {
   "accountId": "ACC-1",
+  "currency": "USD",
   "positions": [
     { "instrumentId": "AAPL", "assetClass": "EQUITY", "quantity": 100, "price": 50 }
   ],
@@ -49,6 +53,7 @@ Response:
 ```json
 {
   "accountId": "ACC-1",
+  "currency": "USD",
   "grossExposure": 5000.00,
   "initialMargin": 750.00,
   "maintenanceMargin": 562.50,
@@ -60,6 +65,13 @@ Response:
 ```
 
 Invalid requests return `400` with an RFC 7807 `application/problem+json` body.
+
+### Currency
+
+`currency` is the portfolio's ISO 4217 reporting currency (uppercase, e.g. `USD`, `GBP`, `JPY`) and is required.
+Each position and collateral item may carry its own `currency`; if omitted it inherits the portfolio's. A line in a
+different currency is rejected with `400`, because adding dollars to yen without an agreed FX rate would silently
+mis-state margin. The result and any margin-call event carry the currency.
 
 ### Input limits
 
@@ -108,6 +120,7 @@ equity rows have a ↻ button that fills in the price from this endpoint.
 {
   "eventId": "9b1c…",
   "accountId": "ACC-1",
+  "currency": "USD",
   "callAmount": 250.00,
   "initialMargin": 750.00,
   "maintenanceMargin": 562.50,
@@ -137,7 +150,7 @@ Or from the command line:
 ```bash
 curl -s localhost:8080/api/v1/margin/calculations \
   -H 'Content-Type: application/json' \
-  -d '{"accountId":"ACC-1","positions":[{"instrumentId":"AAPL","assetClass":"EQUITY","quantity":100,"price":50}],"collateral":[{"type":"CASH","marketValue":500}]}'
+  -d '{"accountId":"ACC-1","currency":"USD","positions":[{"instrumentId":"AAPL","assetClass":"EQUITY","quantity":100,"price":50}],"collateral":[{"type":"CASH","marketValue":500}]}'
 
 # Watch margin calls
 docker exec -it margin-kafka /opt/kafka/bin/kafka-console-consumer.sh \
@@ -180,6 +193,7 @@ src/main/java/com/example/margin
 
 - Persist results / call history (Postgres + Flyway)
 - Netting of offsetting positions and per-instrument rates
+- Multi-currency portfolios via FX conversion at a recorded rate
 - Idempotency / dedup of margin calls per account per cycle
 - Testcontainers-based Kafka IT alongside the embedded broker
 - OpenAPI spec (springdoc)
