@@ -182,14 +182,26 @@ mvn verify   # + integration tests (*IT): HTTP → service → embedded Kafka br
 | `MarginCalculatorTest` | Pure model: rates, shorts, haircuts, call thresholds (parameterised) |
 | `MarginServiceTest` | Mockito: publishes event only on breach, fixed `Clock`, metrics and audit records |
 | `CorrelationIdFilterTest` | Correlation IDs reused, generated, or replaced when unsafe (log injection) |
-| `MarginControllerTest` | `@WebMvcTest`: JSON mapping, validation → 400 |
+| `MarginControllerTest` | `@WebMvcTest`: JSON mapping, validation and input limits → 400 |
+| `ArchitectureTest` | ArchUnit rules for the package structure (see Quality gates) |
 | `MarginApiKafkaIT` | `@SpringBootTest` + `@EmbeddedKafka`: full request → event on topic (with trace header), metrics, health probes |
 
 Integration tests use an embedded broker, so CI needs no Docker for the test stage.
 
+### Quality gates
+
+`mvn verify` fails the build if any of these fail:
+
+| Gate | What it enforces |
+|---|---|
+| Checkstyle (`config/checkstyle/checkstyle.xml`) | Small, defect-focused rule set: unused/star imports, missing braces, `==` on strings, switch fall-through, empty catch blocks, trailing whitespace |
+| ArchUnit (`ArchitectureTest`) | Ports and adapters: the domain is plain Java; the margin model has no web/Kafka/vendor dependencies; Kafka stays inside the messaging adapter; the Finnhub client is reached only through `QuoteProvider`; no package cycles; no field injection or `System.out` |
+| JaCoCo | ≥ 85% line and ≥ 70% branch coverage across unit **and** integration tests; HTML report in `target/site/jacoco/` |
+
 ## CI
 
-`.github/workflows/ci.yml` runs `mvn verify` on JDK 21, uploads test reports, and builds the Docker image.
+`.github/workflows/ci.yml` runs `mvn verify` (all the gates above) on JDK 21 with read-only permissions, uploads
+test and coverage reports, writes a coverage summary to the run page, and builds the Docker image.
 
 ## Project layout
 
