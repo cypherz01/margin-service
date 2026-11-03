@@ -3,6 +3,7 @@ package com.example.margin.marketdata;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Currency;
 import java.util.Locale;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -14,6 +15,9 @@ import org.springframework.web.client.RestClientException;
 public class FinnhubQuoteProvider implements QuoteProvider {
 
     private static final String TOKEN_HEADER = "X-Finnhub-Token";
+
+    /** Finnhub's quote endpoint covers US listings (non-US exchanges need a paid plan), all priced in US dollars. */
+    private static final Currency QUOTE_CURRENCY = Currency.getInstance("USD");
 
     private final RestClient restClient;
     private final String apiKey;
@@ -45,7 +49,7 @@ public class FinnhubQuoteProvider implements QuoteProvider {
         if (body == null || body.c() == null || body.c().signum() == 0 || body.t() == null || body.t() == 0) {
             throw new QuoteNotFoundException(normalised);
         }
-        return new Quote(normalised, body.c(), Instant.ofEpochSecond(body.t()));
+        return new Quote(normalised, body.c(), QUOTE_CURRENCY, Instant.ofEpochSecond(body.t()));
     }
 
     /** Subset of Finnhub's quote payload: c = current price, t = quote time (epoch seconds). */

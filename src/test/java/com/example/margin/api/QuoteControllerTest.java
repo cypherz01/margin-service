@@ -14,6 +14,7 @@ import com.example.margin.marketdata.QuoteNotFoundException;
 import com.example.margin.marketdata.QuoteProvider;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Currency;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -35,12 +36,14 @@ class QuoteControllerTest {
     @Test
     void returnsLatestQuote() throws Exception {
         when(quoteProvider.latest("AAPL")).thenReturn(
-                new Quote("AAPL", new BigDecimal("189.84"), Instant.parse("2025-11-02T16:00:00Z")));
+                new Quote("AAPL", new BigDecimal("189.84"), Currency.getInstance("USD"),
+                        Instant.parse("2025-11-02T16:00:00Z")));
 
         mockMvc.perform(get(URL, "AAPL"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.symbol").value("AAPL"))
                 .andExpect(jsonPath("$.price").value(189.84))
+                .andExpect(jsonPath("$.currency").value("USD"))
                 .andExpect(jsonPath("$.asOf").value("2025-11-02T16:00:00Z"));
     }
 

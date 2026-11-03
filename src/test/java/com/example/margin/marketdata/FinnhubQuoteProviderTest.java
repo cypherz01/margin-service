@@ -13,6 +13,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.util.Currency;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -54,6 +55,8 @@ class FinnhubQuoteProviderTest {
         assertThat(quote.symbol()).isEqualTo("AAPL");
         assertThat(quote.price()).isEqualByComparingTo("189.84");
         assertThat(quote.asOf()).isEqualTo(Instant.ofEpochSecond(1762099200));
+        // Finnhub's quote endpoint covers US listings, priced in US dollars
+        assertThat(quote.currency()).isEqualTo(Currency.getInstance("USD"));
         server.verify();
     }
 
