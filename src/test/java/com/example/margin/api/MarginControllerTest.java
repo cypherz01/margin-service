@@ -15,7 +15,10 @@ import com.example.margin.domain.MarginResult;
 import com.example.margin.messaging.MarginCallPublishException;
 import com.example.margin.service.MarginService;
 import java.math.BigDecimal;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -101,6 +104,80 @@ class MarginControllerTest {
                         }
                         """))
                 .andExpect(status().isBadRequest());
+    }
+
+    /** Huge exponents parse cheaply but cost seconds of CPU to multiply and round, so they must never reach the model. */
+    @ParameterizedTest(name = "quantity {0}")
+    @ValueSource(strings = {"1e5000000", "1e-5000000", "1234567890123", "0.1234567"})
+    void rejectsQuantityOutsideDigitBounds(String quantity) throws Exception {
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+                        {
+                          "accountId": "ACC-1",
+                          "positions": [
+                            {"instrumentId": "AAPL", "assetClass": "EQUITY", "quantity": %s, "price": 50}
+                          ],
+                          "collateral": []
+                        }
+                        """.formatted(quantity)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+
+        verifyNoInteractions(marginService);
+    }
+
+    @Test
+    void rejectsCollateralValueOutsideDigitBounds() throws Exception {
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+                        { "accountId": "ACC-1", "positions": [],
+                          "collateral": [ {"type": "CASH", "marketValue": 1e400} ] }
+                        """))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(marginService);
+    }
+
+    @Test
+    void rejectsTooManyPositions() throws Exception {
+        String position = """
+                {"instrumentId": "AAPL", "assetClass": "EQUITY", "quantity": 1, "price": 1}""";
+        String positions = String.join(",", Collections.nCopies(MarginRequest.MAX_POSITIONS + 1, position));
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+                        { "accountId": "ACC-1", "positions": [%s], "collateral": [] }
+                        """.formatted(positions)))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(marginService);
+    }
+
+    @ParameterizedTest(name = "accountId \"{0}\"")
+    @ValueSource(strings = {"ACC 1", "ACC-1\\nINJECTED", "<script>", "an-account-id-that-is-far-too-long-to-be-a-real-identifier-0123456789"})
+    void rejectsMalformedAccountId(String accountId) throws Exception {
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+                        { "accountId": "%s", "positions": [], "collateral": [] }
+                        """.formatted(accountId)))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(marginService);
+    }
+
+    @Test
+    void acceptsValuesAtTheBoundary() throws Exception {
+        when(marginService.evaluate(any())).thenReturn(new MarginResult("ACC-1",
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false,
+                BigDecimal.ZERO));
+
+        mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("""
+                        {
+                          "accountId": "ACC-1",
+                          "positions": [
+                            {"instrumentId": "AAPL", "assetClass": "EQUITY",
+                             "quantity": -999999999999.999999, "price": 999999999999.99999999}
+                          ],
+                          "collateral": [ {"type": "CASH", "marketValue": 999999999999999.99} ]
+                        }
+                        """))
+                .andExpect(status().isOk());
     }
 
     @Test

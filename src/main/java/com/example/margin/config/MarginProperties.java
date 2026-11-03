@@ -16,6 +16,9 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Margin model parameters, bound from {@code margin.*} in application.yml.
  *
+ * <p>Rates, ratio and haircuts are all fractions in [0, 1]; the application refuses to start otherwise,
+ * so a typo such as {@code haircut: 25} (instead of 0.25) can never silently produce negative collateral.
+ *
  * @param initialMarginRates initial margin as a fraction of exposure, per asset class
  * @param maintenanceRatio   maintenance margin as a fraction of initial margin
  * @param haircuts           fraction deducted from collateral market value, per collateral type
@@ -25,9 +28,9 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "margin")
 public record MarginProperties(
-        @NotEmpty Map<AssetClass, BigDecimal> initialMarginRates,
+        @NotEmpty Map<AssetClass, @NotNull @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal> initialMarginRates,
         @NotNull @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal maintenanceRatio,
-        @NotEmpty Map<CollateralType, BigDecimal> haircuts,
+        @NotEmpty Map<CollateralType, @NotNull @DecimalMin("0.0") @DecimalMax("1.0") BigDecimal> haircuts,
         @NotBlank String marginCallTopic,
         @NotNull Duration publishTimeout) {
 }
