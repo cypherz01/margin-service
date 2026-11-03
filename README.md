@@ -61,6 +61,23 @@ Response:
 
 Invalid requests return `400` with an RFC 7807 `application/problem+json` body.
 
+### Input limits
+
+Every field is bounded, so no single request can consume unbounded CPU or memory. Without limits, a value such as
+`"quantity": 1e5000000` (9 characters of JSON) parses instantly but takes seconds of CPU to multiply and round.
+
+| Field | Limit |
+|---|---|
+| `accountId` | 1–64 of `A-Z a-z 0-9 . _ : -` (also keeps log lines injection-free) |
+| `positions` / `collateral` | at most 1,000 / 100 entries |
+| `instrumentId` | 1–64 characters |
+| `quantity` | ≤ 12 integer digits, ≤ 6 decimal places (signed) |
+| `price` | ≥ 0, ≤ 12 integer digits, ≤ 8 decimal places |
+| `marketValue` | ≥ 0, ≤ 15 integer digits, ≤ 2 decimal places |
+
+Margin parameters are validated at startup as well: every rate, haircut and the maintenance ratio must be a fraction
+in [0, 1], so a typo like `haircut: 25` stops the service from starting instead of producing negative collateral.
+
 ### Live share prices
 
 `GET /api/v1/quotes/{symbol}` returns the latest price for a ticker, via [Finnhub](https://finnhub.io):
