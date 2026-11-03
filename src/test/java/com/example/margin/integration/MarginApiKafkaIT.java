@@ -130,6 +130,19 @@ class MarginApiKafkaIT {
     }
 
     @Test
+    void publishesOpenApiDocumentAndSwaggerUi() {
+        ResponseEntity<String> spec = rest.getForEntity("/v3/api-docs", String.class);
+
+        assertThat(spec.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(spec.getBody())
+                .contains("Margin Service API")
+                .contains("/api/v1/margin/calculations")
+                .contains("/api/v1/quotes/{symbol}");
+        assertThat(rest.getForEntity("/swagger-ui/index.html", String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     void exposesKubernetesHealthProbes() {
         assertThat(rest.getForEntity("/actuator/health/liveness", String.class).getStatusCode())
                 .isEqualTo(HttpStatus.OK);

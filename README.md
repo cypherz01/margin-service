@@ -1,9 +1,32 @@
 # margin-service
 
+[![CI](https://github.com/cypherz01/margin-service/actions/workflows/ci.yml/badge.svg)](https://github.com/cypherz01/margin-service/actions/workflows/ci.yml)
+![Java 21](https://img.shields.io/badge/Java-21-007396)
+![Spring Boot 3.4](https://img.shields.io/badge/Spring%20Boot-3.4-6DB33F)
+![Kafka](https://img.shields.io/badge/Apache%20Kafka-events-231F20)
+[![OpenAPI](https://img.shields.io/badge/OpenAPI-3-6BA539)](#documentation)
+[![AsyncAPI](https://img.shields.io/badge/AsyncAPI-3.0-4F5BD5)](docs/asyncapi.yaml)
+
 Spring Boot REST service that calculates **margin and collateral requirements** for a portfolio of positions,
 and publishes **margin-call events to Kafka** when collateral falls below the maintenance margin.
 
 Built test-first with JUnit 5 and Mockito; integration tests exercise the REST API and Kafka end to end.
+
+## Documentation
+
+| What | Where |
+|---|---|
+| REST API (OpenAPI 3) | Swagger UI at http://localhost:8080/swagger-ui.html, spec at `/v3/api-docs` |
+| Kafka events (AsyncAPI 3) | [`docs/asyncapi.yaml`](docs/asyncapi.yaml) (paste into [studio.asyncapi.com](https://studio.asyncapi.com) to browse) |
+| Architecture and request flow | [`docs/architecture.md`](docs/architecture.md) (component and sequence diagrams) |
+| Design decisions | [`docs/adr/`](docs/adr/README.md): Architecture Decision Records |
+
+```mermaid
+flowchart LR
+    client([Client]) -->|REST| api[api] --> svc[service] --> calc[calculation<br/><i>pure model</i>] --> dom[(domain)]
+    svc --> port{{MarginCallPublisher}} -.-> kafkaAd[Kafka adapter] -->|acks=all| kafka[(margin-calls)]
+    api --> qport{{QuoteProvider}} -.-> finn[Finnhub adapter] --> finnhub[(Finnhub)]
+```
 
 ## Margin model
 
@@ -207,10 +230,11 @@ test and coverage reports, writes a coverage summary to the run page, and builds
 
 ```
 src/main/java/com/example/margin
-├── api/           REST controller, request DTO, problem-detail handler
+├── api/           REST controllers, request DTO, problem-detail handler, correlation-ID filter
 ├── calculation/   MarginCalculator (pure model)
-├── config/        MarginProperties (margin.*), Clock + topic beans
+├── config/        MarginProperties (margin.*), Clock, topic, market-data and OpenAPI beans
 ├── domain/        Position, Collateral, Portfolio, MarginResult, MarginCallEvent
+├── marketdata/    QuoteProvider port + Finnhub adapter
 ├── messaging/     MarginCallPublisher port + Kafka adapter
 └── service/       MarginService (calculate → publish on breach)
 ```
@@ -220,6 +244,7 @@ src/main/java/com/example/margin
 - Persist results / call history (Postgres + Flyway)
 - Netting of offsetting positions and per-instrument rates
 - Multi-currency portfolios via FX conversion at a recorded rate
-- Idempotency / dedup of margin calls per account per cycle
+- Transactional outbox and `Idempotency-Key` so a retried request can never raise a duplicate call
+  ([ADR 0006](docs/adr/0006-transactional-outbox-and-idempotency.md))
+- Authentication and authorisation (OAuth2 resource server, role-based access)
 - Testcontainers-based Kafka IT alongside the embedded broker
-- OpenAPI spec (springdoc)
