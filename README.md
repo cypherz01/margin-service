@@ -6,11 +6,15 @@
 ![Kafka](https://img.shields.io/badge/Apache%20Kafka-events-231F20)
 [![OpenAPI](https://img.shields.io/badge/OpenAPI-3-6BA539)](#documentation)
 [![AsyncAPI](https://img.shields.io/badge/AsyncAPI-3.0-4F5BD5)](docs/asyncapi.yaml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
 Spring Boot REST service that calculates **margin and collateral requirements** for a portfolio of positions,
 and publishes **margin-call events to Kafka** when collateral falls below the maintenance margin.
 
 Built test-first with JUnit 5 and Mockito; integration tests exercise the REST API and Kafka end to end.
+
+![Margin calculator UI: a USD portfolio of equity, bond and FX positions whose collateral has fallen below
+maintenance margin, showing a $436.25 margin call](docs/images/margin-calculator.png)
 
 ## Documentation
 
@@ -250,3 +254,7 @@ src/main/java/com/example/margin
   ([ADR 0006](docs/adr/0006-transactional-outbox-and-idempotency.md))
 - Authentication and authorisation (OAuth2 resource server, role-based access)
 - Testcontainers-based Kafka IT alongside the embedded broker
+
+## License
+
+[MIT](LICENSE)
